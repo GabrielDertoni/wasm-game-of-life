@@ -66,10 +66,6 @@ function getIndex(row, column) {
 };
 
 function drawCells() {
-  // const cells = new Uint8Array(memory.buffer, grid.cells(), WIDTH * HEIGHT);
-  // const updated_list = new Uint32Array(memory.buffer, grid.updated_list(), grid.n_updated());
-
-  // const imageData = ctx.getImageData(0, 0, WIDTH * CELL_SIZE, HEIGHT * CELL_SIZE);
   const imageData = ctx.createImageData(WIDTH * CELL_SIZE, HEIGHT * CELL_SIZE);
 
   const imgBuf = new Uint8Array(memory.buffer, grid.img_buf(), WIDTH * HEIGHT * CELL_SIZE * CELL_SIZE * 4);
@@ -78,6 +74,11 @@ function drawCells() {
   ctx.putImageData(imageData, 0, 0);
 
   /*
+  const cells = new Uint8Array(memory.buffer, grid.cells(), WIDTH * HEIGHT);
+  const updated_list = new Uint32Array(memory.buffer, grid.updated_list(), grid.n_updated());
+
+  const imageData = ctx.getImageData(0, 0, WIDTH * CELL_SIZE, HEIGHT * CELL_SIZE);
+
   ctx.beginPath();
 
   for (let idx of updated_list) {
@@ -96,22 +97,5 @@ function drawCells() {
   }
 
   ctx.stroke();
-
-  for (let row = 0; row < HEIGHT; row++) {
-    for (let col = 0; col < WIDTH; col++) {
-      const idx = getIndex(row, col);
-
-      ctx.fillStyle = cells[idx] === Cell.Dead
-        ? DEAD_COLOR
-        : ALIVE_COLOR;
-
-      ctx.fillRect(
-        col * (CELL_SIZE + 1) + 1,
-        row * (CELL_SIZE + 1) + 1,
-        CELL_SIZE,
-        CELL_SIZE
-      );
-    }
-  }
   */
 }

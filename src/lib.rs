@@ -6,17 +6,6 @@ use std::fmt;
 
 use wasm_bindgen::prelude::*;
 
-// When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
-// allocator.
-#[cfg(feature = "wee_alloc")]
-#[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
-
-#[wasm_bindgen]
-extern {
-    fn alert(s: &str);
-}
-
 #[wasm_bindgen]
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -109,7 +98,8 @@ static DEAD_COLOR : [u8; 4] = [0xff, 0xff, 0xff, 0xff];
 impl Grid {
     #[wasm_bindgen(constructor)]
     pub fn new(width: u32, height: u32, cell_size: u32) -> Self {
-        let mut cells: Vec<Cell> = (0..width * height)
+        // let cells: Vec<Cell> = (0..(width + 2) * (height + 2))
+        let cells: Vec<Cell> = (0..width * height)
             .map(|i| {
                 if i % 2 == 0 || i % 7 == 0 {
                     Cell::alive()
@@ -119,30 +109,11 @@ impl Grid {
             })
             .collect();
 
-        // This is a very heavy operation, but it should only need to be performed in some rare
-        // occasions such as this one.
-        for row in 0..height {
-            for col in 0..width {
-                let mut count = 0;
-                for d_row in [width - 1, 0, 1] {
-                    for d_col in [height - 1, 0, 1] {
-                        if d_row == 0 && d_col == 0 { continue };
-                        let neighbor_row = (row + d_row) % width;
-                        let neighbor_col = (col + d_col) % height;
-                        let neighbor_idx = neighbor_row * width + neighbor_col;
-                        if cells[neighbor_idx as usize].is_alive() {
-                            count += 1;
-                        }
-                    }
-                }
-                cells[(row * width + col) as usize].set_count(count);
-            }
-        }
-
         let alt_buf = cells.clone();
         let update_list = (0..width * height).collect();
         let img_buf = (0..width * height * cell_size * cell_size)
             .flat_map(|_| [0x00, 0x00, 0x00, 0xff])
+            // .flat_map(|_| [0xff, 0xff, 0xff, 0xff])
             .collect();
 
         let mut grid = Grid {
@@ -155,37 +126,117 @@ impl Grid {
             update_list,
         };
 
-        grid.draw_all();
+        grid.init();
         grid
+    }
+
+    fn init(&mut self) {
+        // This is a very heavy operation, but it should only need to be performed in some rare
+        // occasions such as this one.
+        for row in 0..self.height {
+            for col in 0..self.width {
+                let count = self.get_neighbor_count(row, col);
+                self.get_cell_mut(row, col).set_count(count);
+            }
+        }
+
+        let width = self.width as usize;
+        let height = self.height as usize;
+
+        /*
+         * Padding representation of a 3x3 grid:
+         * +-----+
+         * | X X |<-\
+         * |  #  |   \
+         * |X  # |   |- last and first rows of the matrix are for padding.
+         * |X# #X|   /
+         * |  X  |<-/
+         * +-----+
+         *  ^   ^
+         *  |   |
+         *  \---+-- last and first columns of the matrix are for padding.
+         *
+         * note that the '#' are the actual cells on the grid. They occupy only the center 3x3 grid
+         * on the matrix, however. This is because there are some cells at the border for padding.
+         * These padding cells are there in order to prevent the need of a division or remainder 
+         * calculation when wrapping. In the representation, the padding cells are the Xs. So, when
+         * there is a # in one side of the grid, there will be an X in the padding cell on the
+         * opposite side.
+         *
+         */
+
+        /*
+        for row in 1..=height {
+            // Copy to the column index 0 the cells from the last valid column (column `width`).
+            self.cells[row * (width + 2)] = self.cells[row * (width + 2) + width];
+            // Copy to the column index `width + 1` the cells from the first valid column (column 1).
+            self.cells[row * (width + 2) + width + 1] = self.cells[row * (width + 2) + 1];
+        }
+
+        // Copy to the row index 0 the cells from the last valid row (row `height`).
+        self.cells[0..width + 2].copy_from_slice(&self.alt_buf[(width + 2) * (height + 1)..(width + 2) * (height + 2)]);
+        // Copy to the row index `height + 1` the cells from the first valid row (row 1).
+        self.cells[(width + 2) * (height + 1)..(width + 2) * (height + 2)].copy_from_slice(&self.alt_buf[0..width + 2]);
+        */
+
+        // self.draw_all();
     }
 
     #[inline(always)]
     fn get_index(&self, row: u32, column: u32) -> usize {
+        // ((row + 1) * (self.width + 2) + column + 1) as usize
+        // (row * (self.width + 2) + column) as usize
         (row * self.width + column) as usize
     }
 
     #[inline(always)]
-    fn get_cell(&self, row: u32, col: u32) -> Cell {
-        self.cells[self.get_index(row, col)]
+    fn get_cell(&self, row: u32, col: u32) -> &Cell {
+        &self.cells[self.get_index(row, col)]
     }
 
-    fn live_neighbor_count(&self, row: u32, col: u32) -> u8 {
-        let mut count = 0;
+    #[inline(always)]
+    fn get_cell_mut(&mut self, row: u32, col: u32) -> &mut Cell {
+        let idx = self.get_index(row, col);
+        &mut self.cells[idx]
+    }
 
+    fn get_neighbor_count(&self, row: u32, col: u32) -> u8 {
+        let mut count = 0;
         for d_row in [self.width - 1, 0, 1] {
             for d_col in [self.height - 1, 0, 1] {
                 if d_row == 0 && d_col == 0 { continue };
+                // let neighbor_row = row as i32 + d_row;
+                // let neighbor_col = col as i32 + d_col;
+
                 let neighbor_row = (row + d_row) % self.width;
                 let neighbor_col = (col + d_col) % self.height;
-                let neighbor_idx = neighbor_row * self.width + neighbor_col;
-                if self.cells[neighbor_idx as usize].is_alive() {
+
+                if self.get_cell(neighbor_row as u32, neighbor_col as u32).is_alive() {
                     count += 1;
                 }
             }
         }
-
         count
     }
+
+    #[inline(always)]
+    fn update_neighbors_counts(&mut self, row: u32, col: u32, delta: i8) {
+        for d_row in [self.width - 1, 0, 1] {
+            for d_col in [self.height - 1, 0, 1] {
+                if d_row == 0 && d_col == 0 { continue };
+                // let neighbor_row = row as i32 + d_row;
+                // let neighbor_col = col as i32 + d_col;
+
+                let neighbor_row = (row + d_row) % self.width;
+                let neighbor_col = (col + d_col) % self.height;
+
+                let idx = self.get_index(neighbor_row as u32, neighbor_col as u32);
+                let count = self.alt_buf[idx].get_count();
+                self.alt_buf[idx].set_count((count as i8 + delta) as u8);
+            }
+        }
+    }
+
 
     // Goes through every cell on the list
     pub fn step(&mut self) {
@@ -194,7 +245,7 @@ impl Grid {
         for row in 0..self.height {
             for col in 0..self.width {
                 let idx = self.get_index(row, col);
-                let cell = self.get_cell(row, col);
+                let cell = *self.get_cell(row, col);
 
                 // This means that the cell is dead AND has no neighbors.
                 if cell == 0 { continue };
@@ -217,19 +268,8 @@ impl Grid {
                 if has_changed {
                     self.update_list.push(self.get_index(row, col) as u32);
 
-                    // This should be faster than checking at every iteration of the loop if the
-                    // cell was alive.
-                    let update_fun = if cell.is_alive() { Cell::dec_count } else { Cell::inc_count };
-
-                    for d_row in [self.width - 1, 0, 1] {
-                        for d_col in [self.height - 1, 0, 1] {
-                            if d_row == 0 && d_col == 0 { continue };
-                            let neighbor_row = (row + d_row) % self.width;
-                            let neighbor_col = (col + d_col) % self.height;
-                            let neighbor_idx = self.get_index(neighbor_row, neighbor_col);
-                            update_fun(&mut self.alt_buf[neighbor_idx]);
-                        }
-                    }
+                    let delta = if cell.is_alive() { -1 } else { 1 };
+                    self.update_neighbors_counts(row, col, delta);
 
                     self.draw_cell(row, col, new_cell_state);
                 }
@@ -271,36 +311,21 @@ impl Grid {
     }
 
     pub fn draw_all(&mut self) {
-        let &mut Grid {
-            // ref mut update_list,
-            ref mut img_buf,
-            ref cells,
-            width,
-            height,
-            cell_size,
-            ..
-        } = self;
-
         // TODO: Use the update list in order to only redraw what is necessary.
 
         let mut i = 0;
 
-        for row in 0..height {
-            for _ in 0..cell_size {
-                for col in 0..width {
-                    let color = if cells[(row * width + col) as usize].is_alive() {
+        for row in 0..self.height {
+            for _ in 0..self.cell_size {
+                for col in 0..self.width {
+                    let color = if self.get_cell(row + 1, col + 1).is_alive() {
                         ALIVE_COLOR
                     } else {
                         DEAD_COLOR
                     };
 
-                    for _ in 0..cell_size {
-                        img_buf[i    ] = color[0];
-                        img_buf[i + 1] = color[1];
-                        img_buf[i + 2] = color[2];
-                        img_buf[i + 3] = color[3];
-                        i += 4;
-                    }
+                    self.img_buf[i..i + 4].copy_from_slice(&color);
+                    i += 4;
                 }
             }
         }
