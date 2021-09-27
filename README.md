@@ -2,7 +2,7 @@
 
   <h1><code>wasm-game-of-life</code></h1>
 
-  <strong>An implementation of Conway's Game of Life following the tutorial of <a href="https://github.com/rustwasm/wasm-pack">wasm-pack</a>.</strong>
+  <strong>An implementation of Conway's Game of Life following the tutorial of <a href="https://rustwasm.github.io/docs/book/introduction.html">wasm-pack</a>.</strong>
 
   <sub>Built with 🦀🕸 by <a href="https://rustwasm.github.io/">The Rust and WebAssembly Working Group</a></sub>
 </div>
