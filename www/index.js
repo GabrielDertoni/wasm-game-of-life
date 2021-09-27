@@ -21,7 +21,7 @@ canvas.width = CELL_SIZE * WIDTH;
 
 const ctx = canvas.getContext('2d');
 
-// document.body.addEventListener("click", () => bench());
+// document.body.addEventListener("click", () => requestAnimationFrame(renderLoop));
 
 function renderLoop() {
   grid.step();
