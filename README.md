@@ -18,5 +18,6 @@ wasm-pack build
 ## Usage
 
 ```
+cd www
 npm run start
 ```
