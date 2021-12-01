@@ -17,12 +17,12 @@ impl Cell {
 
     #[inline(always)]
     fn alive() -> Self {
-        Cell(Cell::DEAD as u8)
+        Cell(Cell::ALIVE as u8)
     }
 
     #[inline(always)]
     fn dead() -> Self {
-        Cell(Cell::ALIVE as u8)
+        Cell(Cell::DEAD as u8)
     }
 
     #[inline(always)]
@@ -98,6 +98,7 @@ static DEAD_COLOR : [u8; 4] = [0xff, 0xff, 0xff, 0xff];
 impl Grid {
     #[wasm_bindgen(constructor)]
     pub fn new(width: u32, height: u32, cell_size: u32) -> Self {
+        /*
         let cells: Vec<Cell> = (0..(width + 2) * (height + 2))
         // let cells: Vec<Cell> = (0..width * height)
             .map(|i| {
@@ -108,10 +109,14 @@ impl Grid {
                 }
             })
             .collect();
+        */
+        let cells: Vec<Cell> = (0..(width + 2) * (height + 2))
+            .map(|_| Cell::dead())
+            .collect();
 
-        let alt_buf = Vec::new();
+        let alt_buf = Vec::default();
         let update_list = (0..width * height).collect();
-        let img_buf = (0..width * height * cell_size * cell_size)
+        let img_buf = (0..(width + 2) * (height + 2) * cell_size * cell_size)
             .flat_map(|_| [0x00, 0x00, 0x00, 0xff])
             .collect();
 
@@ -125,24 +130,19 @@ impl Grid {
             update_list,
         };
 
+        grid.get_cell_mut(4, 2).set_state(true);
+        grid.get_cell_mut(2, 3).set_state(true);
+        grid.get_cell_mut(4, 3).set_state(true);
+        grid.get_cell_mut(3, 4).set_state(true);
+        grid.get_cell_mut(4, 4).set_state(true);
+
         grid.init();
+
         grid
     }
 
     fn init(&mut self) {
-        // This is a very heavy operation, but it should only need to be performed in some rare
-        // occasions such as this one.
-        for row in 1..=self.height {
-            for col in 1..=self.width {
-                let count = self.get_neighbor_count(row, col);
-                self.get_cell_mut(row, col).set_count(count);
-            }
-        }
-
         self.alt_buf = self.cells.clone();
-
-        let width = self.width as usize;
-        let height = self.height as usize;
 
         /*
          * Padding representation of a 3x3 grid:
@@ -166,19 +166,43 @@ impl Grid {
          *
          */
 
-        for row in 1..=height {
-            // Copy to the column index 0 the cells from the last valid column (column `width`).
-            self.cells[row * (width + 2)] = self.cells[row * (width + 2) + width];
-            // Copy to the column index `width + 1` the cells from the first valid column (column 1).
-            self.cells[row * (width + 2) + width + 1] = self.cells[row * (width + 2) + 1];
+        self.write_cells();
+
+        // This is a very heavy operation, but it should only need to be performed in some rare
+        // occasions such as this one.
+        for row in 1..=self.height {
+            for col in 1..=self.width {
+                let count = self.get_neighbor_count(row, col);
+                self.get_cell_mut(row, col).set_count(count);
+            }
         }
 
-        // Copy to the row index 0 the cells from the last valid row (row `height`).
-        self.cells[0..width + 2].copy_from_slice(&self.alt_buf[(width + 2) * (height + 1)..(width + 2) * (height + 2)]);
-        // Copy to the row index `height + 1` the cells from the first valid row (row 1).
-        self.cells[(width + 2) * (height + 1)..(width + 2) * (height + 2)].copy_from_slice(&self.alt_buf[0..width + 2]);
-
         self.draw_all();
+    }
+
+    #[inline(always)]
+    fn write_cells(&mut self) {
+        for row in 1..=self.height {
+            let from = self.get_index(row, self.width);
+            let to = self.get_index(row, 0);
+            self.alt_buf[to] = self.alt_buf[from];
+
+            let from = self.get_index(row, self.width + 1);
+            let to = self.get_index(row, 1);
+            self.alt_buf[to] = self.alt_buf[from];
+        }
+
+        let last_row_start = self.get_index(self.height, 0);
+        let last_row_end = self.get_index(self.height, self.width + 2);
+        self.alt_buf.copy_within(last_row_start..last_row_end, 0);
+
+        // Copy to the row index `height + 1` the cells from the first valid row (row 1).
+        let pad_row_start = self.get_index(0, 0);
+        let pad_row_end = self.get_index(0, self.width + 2);
+        let row_start = self.get_index(self.height + 1, 0);
+        self.alt_buf.copy_within(pad_row_start..pad_row_end, row_start);
+
+        self.cells.copy_from_slice(&self.alt_buf);
     }
 
     #[inline(always)]
@@ -209,9 +233,6 @@ impl Grid {
                 let neighbor_row = row as i32 + d_row;
                 let neighbor_col = col as i32 + d_col;
 
-                // let neighbor_row = (row + d_row) % self.width;
-                // let neighbor_col = (col + d_col) % self.height;
-
                 if self.get_cell(neighbor_row as u32, neighbor_col as u32).is_alive() {
                     count += 1;
                 }
@@ -221,15 +242,12 @@ impl Grid {
     }
 
     #[inline(always)]
-    fn update_neighbors_counts(&mut self, row: u32, col: u32, delta: i8) {
+    fn update_alt_buf_neighbors_counts(&mut self, row: u32, col: u32, delta: i8) {
         for d_row in [-1, 0, 1] {
             for d_col in [-1, 0, 1] {
                 if d_row == 0 && d_col == 0 { continue };
                 let neighbor_row = row as i32 + d_row;
                 let neighbor_col = col as i32 + d_col;
-
-                // let neighbor_row = (row + d_row) % self.width;
-                // let neighbor_col = (col + d_col) % self.height;
 
                 let idx = self.get_index(neighbor_row as u32, neighbor_col as u32);
                 let count = self.alt_buf[idx].get_count();
@@ -266,19 +284,18 @@ impl Grid {
                 };
 
                 if has_changed {
+                    self.alt_buf[idx].set_state(new_cell_state);
                     self.update_list.push(self.get_index(row, col) as u32);
 
                     let delta = if cell.is_alive() { -1 } else { 1 };
-                    self.update_neighbors_counts(row, col, delta);
+                    self.update_alt_buf_neighbors_counts(row, col, delta);
 
                     self.draw_cell(row, col, new_cell_state);
                 }
-
-                self.alt_buf[idx].set_state(new_cell_state);
             }
         }
 
-        self.cells.copy_from_slice(&self.alt_buf);
+        self.write_cells();
     }
 
     ///! Draws the cell at `row` and `col` according to the `is_alive` parameter. Will not check

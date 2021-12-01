@@ -3,13 +3,13 @@ import { memory } from "wasm-game-of-life/wasm_game_of_life_bg";
 
 init();
 
-const CELL_SIZE = 2;
+const CELL_SIZE = 10;
 const GRID_COLOR = "#CCCCCC";
 const DEAD_COLOR = "#FFFFFF";
 const ALIVE_COLOR = "#000000";
 
-const WIDTH  = 512;
-const HEIGHT = 512;
+const WIDTH  = 9;
+const HEIGHT = 9;
 
 const grid = new Grid(WIDTH, HEIGHT, CELL_SIZE);
 
@@ -21,15 +21,14 @@ canvas.width = CELL_SIZE * WIDTH;
 
 const ctx = canvas.getContext('2d');
 
-// document.body.addEventListener("click", () => requestAnimationFrame(renderLoop));
+document.body.addEventListener("click", () => requestAnimationFrame(renderLoop));
 
 function renderLoop() {
+  drawCells();
+  drawGrid();
   grid.step();
 
-  drawGrid();
-  drawCells();
-
-  requestAnimationFrame(renderLoop);
+  // requestAnimationFrame(renderLoop);
 }
 
 requestAnimationFrame(renderLoop);
@@ -37,11 +36,12 @@ requestAnimationFrame(renderLoop);
 function drawGrid() {
   ctx.beginPath();
   ctx.strokeColor = GRID_COLOR;
+  ctx.strokeWeight = 3;
 
   ctx.moveTo(0                           , 0);
-  ctx.lineTo(0                           , (CELL_SIZE + 1) * WIDTH + 1);
-  ctx.lineTo((CELL_SIZE + 1) * HEIGHT + 1, (CELL_SIZE + 1) * WIDTH + 1);
-  ctx.lineTo((CELL_SIZE + 1) * HEIGHT + 1, 0);
+  ctx.lineTo(0                           , CELL_SIZE * WIDTH);
+  ctx.lineTo(CELL_SIZE * HEIGHT, CELL_SIZE * WIDTH);
+  ctx.lineTo(CELL_SIZE * HEIGHT, 0);
   ctx.lineTo(0                           , 0);
 
   /*
@@ -68,7 +68,8 @@ function getIndex(row, column) {
 function drawCells() {
   const imageData = ctx.createImageData(WIDTH * CELL_SIZE, HEIGHT * CELL_SIZE);
 
-  const imgBuf = new Uint8Array(memory.buffer, grid.img_buf(), WIDTH * HEIGHT * CELL_SIZE * CELL_SIZE * 4);
+  // const imgBuf = new Uint8Array(memory.buffer, grid.img_buf(), WIDTH * HEIGHT * CELL_SIZE * CELL_SIZE * 4);
+  const imgBuf = new Uint8Array(memory.buffer, grid.img_buf(), (WIDTH + 2) * (HEIGHT + 2) * CELL_SIZE * CELL_SIZE * 4);
 
   imageData.data.set(imgBuf);
   ctx.putImageData(imageData, 0, 0);

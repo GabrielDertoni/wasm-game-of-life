@@ -3,9 +3,6 @@
   "version": "0.1.0",
   "description": "A simple implementation of Conway's Game of Life with Rust and WASM.",
   "main": "index.js",
-  "bin": {
-    "create-wasm-app": ".bin/create-wasm-app.js"
-  },
   "scripts": {
     "build": "webpack --config webpack.config.js",
     "start": "webpack-dev-server"
